@@ -105,18 +105,43 @@ def fetch_candles(symbol, days):
     df["mm20"] = df["vol_fin"].rolling(20).mean()
     return df
 
-@st.cache_data(ttl=300)
-def fetch_options(symbol):
-    r = requests.get(f"{OPLAB_BASE_URL}/market/options/{symbol}", headers=_headers(), timeout=30)
-    r.raise_for_status()
-    df = pd.DataFrame(r.json())
-    df["expiration"] = pd.to_datetime(df["due_date"])
-    df["strike"] = _to_num(df["strike_price"])
-    df["type"] = df["category"].str.upper()
-    df["last"] = _to_num(df["last_price"])
-    df["volume"] = _to_num(df["volume"])
-    df["ref_price"] = _to_num(df["spot_price"])
-    return df
+@st.cache_data(ttl=300, show_spinner=True)
+def fetch_options(symbol: str) -> pd.DataFrame:
+    url = f"{OPLAB_BASE_URL}/market/options/{symbol}"
+    try:
+        r = requests.get(url, headers=_headers(), timeout=30)
+
+        # ❌ NÃO explode a app
+        if r.status_code != 200:
+            st.warning(f"⚠️ Oplab retornou {r.status_code} para {symbol}")
+            return pd.DataFrame()
+
+        data = r.json()
+        if not isinstance(data, list) or len(data) == 0:
+            st.warning(f"⚠️ Snapshot vazio para {symbol}")
+            return pd.DataFrame()
+
+        df = pd.DataFrame(data)
+
+        # Normalizações mínimas
+        df["expiration"] = pd.to_datetime(df.get("due_date"), errors="coerce")
+        df["strike"] = pd.to_numeric(df.get("strike_price"), errors="coerce")
+        df["type"] = df.get("category", "").astype(str).str.upper()
+        df["last"] = pd.to_numeric(df.get("last_price"), errors="coerce")
+        df["volume"] = pd.to_numeric(df.get("volume"), errors="coerce")
+        df["ref_price"] = pd.to_numeric(df.get("spot_price"), errors="coerce")
+        df["symbol"] = df.get("option_symbol")
+
+        return df.dropna(subset=["symbol"]).reset_index(drop=True)
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"❌ Erro de rede ao buscar opções de {symbol}: {e}")
+        return pd.DataFrame()
+
+    except Exception as e:
+        st.error(f"❌ Erro inesperado ({symbol}): {e}")
+        return pd.DataFrame()
+
 
 # =========================================================
 # Main
