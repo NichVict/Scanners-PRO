@@ -1,21 +1,40 @@
+# =========================================================
+# 🧠 SCANNER DE OPÇÕES — FÊNIX (VERSÃO ASSINANTE / APIMEC)
+# =========================================================
 from __future__ import annotations
-import os, math
+import streamlit as st
+st.set_page_config(
+    page_title="Scanner de Opções",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# 🔐 Login padrão Phoenix (assinante)
+from auth import user_logged, restore_session_if_needed
+restore_session_if_needed()
+
+if not user_logged():
+    st.error("⚠️ Acesso restrito a assinantes.")
+    if st.button("🔐 Ir para Login"):
+        st.switch_page("pages/01_login.py")
+    st.stop()
+
+# =========================================================
+# Imports
+# =========================================================
+import os, math, calendar
 from datetime import datetime, timedelta, date
 
-import streamlit as st
-import pandas as pd
 import numpy as np
-import requests
-import yfinance as yf
-
+import pandas as pd
+import requests, yfinance as yf
 import plotly.graph_objects as go
+
 from scipy.stats import norm
 from scipy.optimize import brentq
 
-
-
 # =========================================================
-# 🔐 ENV — OPLAB
+# ENV helpers
 # =========================================================
 def getenv(key: str) -> str:
     val = os.getenv(key)
@@ -30,190 +49,141 @@ OPLAB_API_KEY  = getenv("OPLAB_API_KEY")
 OPLAB_BASE_URL = getenv("OPLAB_BASE_URL") or "https://api.oplab.com.br/v3"
 
 def _headers():
-    return {
-        "Access-Token": OPLAB_API_KEY,
-        "Accept": "application/json"
-    }
+    return {"Access-Token": OPLAB_API_KEY, "Accept": "application/json"}
+
+def _to_num(x): 
+    return pd.to_numeric(x, errors="coerce")
 
 # =========================================================
-# 📊 DATA FETCH
+# Sidebar — parâmetros (IGUAL AO ORIGINAL)
 # =========================================================
-@st.cache_data(ttl=300)
-def fetch_options(symbol: str) -> pd.DataFrame:
-    url = f"{OPLAB_BASE_URL}/market/options/{symbol}"
-    r = requests.get(url, headers=_headers(), timeout=30)
-    r.raise_for_status()
-    data = r.json()
-    df = pd.DataFrame(data if isinstance(data, list) else data.get("data", []))
-    if df.empty:
-        return df
+with st.sidebar:
+    st.title("⚙️ Parâmetros do Scanner")
 
-    df.rename(columns={
-        "option_symbol": "symbol",
-        "strike_price": "strike",
-        "due_date": "expiration",
-        "last_price": "last",
-        "spot_price": "ref_price"
-    }, inplace=True)
+    symbols = st.multiselect(
+        "Ativos (subjacentes)",
+        ["BOVA11","PETR4","VALE3","ITUB4","WEGE3","ABEV3","BBDC4","BBAS3","EMBR3"],
+        default=["BOVA11"]
+    )
 
-    df["expiration"] = pd.to_datetime(df["expiration"], errors="coerce")
-    df["strike"] = pd.to_numeric(df["strike"], errors="coerce")
-    df["last"] = pd.to_numeric(df["last"], errors="coerce")
-    df["bid"] = pd.to_numeric(df.get("bid"), errors="coerce")
-    df["ask"] = pd.to_numeric(df.get("ask"), errors="coerce")
-    df["volume"] = pd.to_numeric(df.get("volume"), errors="coerce")
-    df["type"] = df.get("type", df.get("category")).astype(str).str.upper()
+    days = st.number_input("Dias de histórico (candles)", 30, 365, 180, 5)
+    taxa_juros = st.number_input("Taxa de juros anual (%)", 0.0, 50.0, 14.90, 0.1) / 100
 
-    return df.dropna(subset=["symbol"])
+    tipo_opcao = st.radio("Tipo de opção", ["Ambas","CALL","PUT"], horizontal=True)
 
+    def proximo_vencimento():
+        hoje = date.today()
+        c = calendar.Calendar()
+        sextas = [d for d in c.itermonthdates(hoje.year, hoje.month) if d.weekday()==4 and d.month==hoje.month]
+        if len(sextas)>=3 and hoje<=sextas[2]:
+            return sextas[2]
+        mes = hoje.month+1 if hoje.month<12 else 1
+        ano = hoje.year if hoje.month<12 else hoje.year+1
+        sextas = [d for d in c.itermonthdates(ano, mes) if d.weekday()==4 and d.month==mes]
+        return sextas[2]
+
+    col1, col2 = st.columns(2)
+    with col1:
+        venc_ini = st.date_input("Venc. inicial", proximo_vencimento())
+    with col2:
+        venc_fim = st.date_input("Venc. final", venc_ini)
+
+    delta_min = st.slider("Delta mínimo (abs)", 0.0, 1.0, 0.30, 0.01)
+    delta_max = st.slider("Delta máximo (abs)", 0.0, 1.0, 0.60, 0.01)
+    iv_pct_max = st.slider("IV percentil local máx.", 0, 100, 60)
+    min_vol = st.number_input("Volume mínimo (opção)", 0, 200000, 0)
+    max_spread = st.slider("Spread relativo máx.", 0.0, 2.0, 0.05, 0.01)
+
+    delta_target = st.slider("Delta alvo p/ score", 0.0, 1.0, 0.45, 0.01)
+    top_n = st.number_input("Top por vencimento", 1, 10, 5)
+
+    run = st.button("🌀 Rodar Scanner", type="primary", width="stretch")
+
+# =========================================================
+# Fetch data
+# =========================================================
 @st.cache_data(ttl=600)
-def fetch_candles(symbol: str, days: int = 180) -> pd.DataFrame:
+def fetch_candles(symbol, days):
     end = datetime.today()
     start = end - timedelta(days=days)
     df = yf.download(f"{symbol}.SA", start=start, end=end, progress=False)
     if df.empty:
         return df
-    df.reset_index(inplace=True)
-    df.rename(columns={
-        "Date": "date",
-        "Open": "open",
-        "High": "high",
-        "Low": "low",
-        "Close": "close",
-        "Volume": "volume"
-    }, inplace=True)
+    df = df.reset_index()
+    df["vol_fin"] = df["Close"] * df["Volume"]
+    df["mm20"] = df["vol_fin"].rolling(20).mean()
+    return df
+
+@st.cache_data(ttl=300)
+def fetch_options(symbol):
+    r = requests.get(f"{OPLAB_BASE_URL}/market/options/{symbol}", headers=_headers(), timeout=30)
+    r.raise_for_status()
+    df = pd.DataFrame(r.json())
+    df["expiration"] = pd.to_datetime(df["due_date"])
+    df["strike"] = _to_num(df["strike_price"])
+    df["type"] = df["category"].str.upper()
+    df["last"] = _to_num(df["last_price"])
+    df["volume"] = _to_num(df["volume"])
+    df["ref_price"] = _to_num(df["spot_price"])
     return df
 
 # =========================================================
-# 🧮 BLACK & SCHOLES
+# Main
 # =========================================================
-def bs_price(S, K, T, r, sigma, call=True):
-    d1 = (math.log(S/K) + (r + 0.5*sigma**2)*T) / (sigma*math.sqrt(T))
-    d2 = d1 - sigma*math.sqrt(T)
-    if call:
-        return S*norm.cdf(d1) - K*math.exp(-r*T)*norm.cdf(d2)
-    return K*math.exp(-r*T)*norm.cdf(-d2) - S*norm.cdf(-d1)
+st.title("🧠 Scanner de Opções")
 
-def implied_vol(S, K, T, r, premium, call=True):
-    try:
-        return brentq(lambda x: bs_price(S, K, T, r, x, call) - premium, 0.001, 5)
-    except:
-        return np.nan
+if run:
+    if not symbols:
+        st.warning("Selecione ao menos um ativo.")
+        st.stop()
 
-# =========================================================
-# 🧠 SIDEBAR
-# =========================================================
-with st.sidebar:
-    st.header("⚙️ Parâmetros")
-
-    symbols = st.multiselect(
-        "Ativos",
-        ["BOVA11","PETR4","VALE3","ITUB4","WEGE3"],
-        default=["BOVA11"]
-    )
-
-    tipo = st.radio("Tipo", ["CALL", "PUT", "Ambas"], horizontal=True)
-
-    delta_min, delta_max = st.slider("Delta", 0.0, 1.0, (0.3, 0.6), 0.01)
-    iv_max = st.slider("IV % Máx", 0, 100, 60)
-    spread_max = st.slider("Spread Máx", 0.0, 2.0, 0.05)
-
-    juros = st.number_input("Juros (%)", 0.0, 50.0, 14.9) / 100
-    top_n = st.number_input("Top N", 1, 10, 5)
-
-    run = st.button("🌀 Rodar Scanner", type="primary", use_container_width=True)
-
-# =========================================================
-# 🚀 EXECUÇÃO
-# =========================================================
-if run and symbols:
-
-    all_opts = []
-    all_candles = []
-
+    dfs_candles, dfs_opts = [], []
     for s in symbols:
-        all_opts.append(fetch_options(s))
-        all_candles.append(fetch_candles(s))
+        dfs_candles.append(fetch_candles(s, days))
+        dfs_opts.append(fetch_options(s))
 
-    opts = pd.concat(all_opts, ignore_index=True)
-    candles = pd.concat(all_candles, ignore_index=True)
+    candles = pd.concat(dfs_candles)
+    opts = pd.concat(dfs_opts)
 
-    opts["T"] = (opts["expiration"] - pd.Timestamp.today()).dt.days.clip(lower=1) / 252
-    opts["mid"] = (opts["bid"] + opts["ask"]) / 2
-    opts["premium"] = opts["mid"].fillna(opts["last"])
+    opts = opts[
+        (opts["expiration"].dt.date.between(venc_ini, venc_fim)) &
+        (opts["volume"] >= min_vol)
+    ]
 
-    opts["iv"] = opts.apply(
-        lambda r: implied_vol(
-            r["ref_price"], r["strike"], r["T"], juros, r["premium"],
-            call=r["type"] == "CALL"
-        ), axis=1
-    )
+    if tipo_opcao != "Ambas":
+        opts = opts[opts["type"] == tipo_opcao]
 
     opts["score"] = (
-        0.4 * (1 - opts["iv"].rank(pct=True)) +
-        0.3 * opts["volume"].rank(pct=True) +
-        0.2 * (1 - abs(opts["strike"] - opts["ref_price"]) / opts["ref_price"]) +
-        0.1 * (1 - (opts["ask"] - opts["bid"]) / opts["last"])
+        0.4 * (1 - opts["volume"].rank(pct=True)) +
+        0.3 * (1 - (opts["strike"] / opts["ref_price"] - 1).abs()) +
+        0.2 * (1 - (opts["type"]=="PUT").astype(int)) +
+        0.1 * (1 - opts["volume"].rank(pct=True))
     )
 
-    opts = opts.sort_values("score", ascending=False).head(top_n)
+    top = (
+        opts.sort_values("score", ascending=False)
+            .groupby(opts["expiration"].dt.date)
+            .head(top_n)
+    )
 
-    # =========================
-    # 🏆 CARDS
-    # =========================
-    st.subheader("🏆 Top Oportunidades")
-
-    cols = st.columns(len(opts))
-    for col, (_, r) in zip(cols, opts.iterrows()):
-        color = "#1f7a1f" if r["type"] == "CALL" else "#7a1f1f"
-        col.markdown(
-            f"""
-            <div style="
-                background:{color};
-                padding:16px;
-                border-radius:16px;
-                text-align:center;
-                color:white">
-                <b>{r['symbol']}</b><br>
-                {r['type']}<br>
-                Score {r['score']:.2f}<br>
-                Strike {r['strike']}<br>
-                Venc {r['expiration'].date()}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    st.markdown("---")
-
-    # =========================
-    # 📋 TABELA
-    # =========================
+    st.subheader("🏆 Top Oportunidades por Vencimento 💎")
     st.dataframe(
-        opts[["symbol","type","strike","expiration","score","iv","volume"]],
-        use_container_width=True,
-        hide_index=True
+        top[["symbol","type","strike","expiration","score","volume"]],
+        hide_index=True,
+        width="stretch"
     )
 
     st.markdown("---")
+    st.subheader("📈 Candles — OHLCV")
 
-    # =========================
-    # 📈 CANDLES
-    # =========================
     for s in symbols:
-        df = candles[candles["Symbol"] == s] if "Symbol" in candles else candles
-        if df.empty:
-            continue
-
-        fig = go.Figure(go.Candlestick(
-            x=df["date"],
-            open=df["open"],
-            high=df["high"],
-            low=df["low"],
-            close=df["close"]
+        df = candles[candles["Ticker"]==s] if "Ticker" in candles else candles
+        fig = go.Figure()
+        fig.add_trace(go.Candlestick(
+            x=df["Date"],
+            open=df["Open"], high=df["High"],
+            low=df["Low"], close=df["Close"],
+            name=s
         ))
-        fig.update_layout(template="plotly_dark", title=s, height=450)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with st.expander("📦 Dados brutos"):
-        st.dataframe(opts, use_container_width=True)
+        fig.update_layout(template="plotly_dark", height=500)
+        st.plotly_chart(fig, width="stretch")
