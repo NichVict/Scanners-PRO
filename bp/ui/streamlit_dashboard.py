@@ -210,3 +210,13 @@ if out:
         pdf = export_pdf_apimec_from_scanner(sel, nome, cnpi, cpf)
         with open(pdf,"rb") as f:
             st.download_button("⬇️ Baixar PDF", f, file_name=pdf)
+
+
+
+# ------------------------------------------------------------
+# ENTRYPOINT
+# ------------------------------------------------------------
+if __name__ == "__main__":
+    render_dashboard()
+
+
