@@ -12,29 +12,7 @@ import plotly.graph_objects as go
 from scipy.stats import norm
 from scipy.optimize import brentq
 
-# =========================================================
-# 🔐 LOGIN — PADRÃO PHOENIX
-# =========================================================
-from auth import user_logged, restore_session_if_needed
 
-restore_session_if_needed()
-
-if not user_logged():
-    st.error("🔐 Acesso restrito a assinantes.")
-    if st.button("Ir para Login"):
-        st.switch_page("pages/01_login.py")
-    st.stop()
-
-# =========================================================
-# ⚙️ CONFIG STREAMLIT
-# =========================================================
-st.set_page_config(
-    page_title="Scanner de Opções",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-st.title("🧠 Scanner de Opções")
 
 # =========================================================
 # 🔐 ENV — OPLAB
