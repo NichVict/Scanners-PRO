@@ -1,216 +1,204 @@
-# ============================================================
-# 🦅 PROJETO FÊNIX — SCANNER DE AÇÕES + RELATÓRIO APIMEC
-# Arquivo ÚNICO • Sem Supabase • Scanner → Relatório
-# ============================================================
+# 09_⚙️_Scanner_Acoes_TOP5_DF.py
+# -*- coding: utf-8 -*-
 
 import streamlit as st
-import time, os, io, datetime
+import time
 import pandas as pd
-import numpy as np
-import yfinance as yf
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+import os
 
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.units import cm
-from reportlab.lib.utils import ImageReader
-from reportlab.platypus import Table, TableStyle, Paragraph, Frame
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
-
-# ============================================================
-# IMPORTS DO BP-FÊNIX
-# ============================================================
 from bp.core.data_loader import get_ticker_data, validate_data
 from bp.core.indicators import apply_all_indicators
 from bp.core.criteria_engine import evaluate_all_criteria
 from bp.core.scoring import calculate_score
 from bp.core.selectors import select_top_assets
-from bp.core.trade_engine import generate_trade_setup
 from bp.ui.visual_blocks import criteria_block
 from bp.ui.radar_chart import plot_radar
+from bp.core.trade_engine import generate_trade_setup
 
-# ============================================================
-# CONFIG STREAMLIT
-# ============================================================
-st.set_page_config(
-    page_title="Projeto Fênix — Scanner de Ações",
-    layout="wide",
-    page_icon="🦅"
-)
 
-st.title("🦅 Projeto Fênix — Scanner de Ações")
+# ------------------------------------------------------------
+# CONFIGURAÇÃO DA PÁGINA
+# ------------------------------------------------------------
+def setup_page():
+    st.set_page_config(
+        page_title="BP Fênix – Scanner Ações",
+        layout="wide",
+        page_icon="🦅"
+    )
+    st.title("🦅 Projeto Fênix — Scanner de Ações")
 
-# ============================================================
-# CSV DE TICKERS
-# ============================================================
+
+# ------------------------------------------------------------
+# LOCALIZAÇÃO DO CSV
+# ------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 CSV_PATH = os.path.join(BASE_DIR, "data", "tickers_ibov.csv")
 
-# ============================================================
-# SCANNER
-# ============================================================
+
+# ------------------------------------------------------------
+# CICLO PRINCIPAL
+# ------------------------------------------------------------
 def run_full_cycle_with_logs(tickers):
+
+    st.info(f"🔍 Total de ativos carregados: **{len(tickers)}**")
+
+    progress = st.progress(0)
+    status_box = st.status("🚀 Iniciando varredura do BP-Fênix...", expanded=False)
+
     results = {}
-    for ticker in tickers:
-        df = get_ticker_data(ticker + ".SA")
-        if not validate_data(df):
-            continue
-        df = apply_all_indicators(df)
-        criteria = evaluate_all_criteria(df)
-        score_info = calculate_score(criteria)
-        score_info["details"]["df"] = df
-        results[ticker] = score_info
+    total = len(tickers)
+
+    with status_box:
+        st.write("### 📡 LOG DA EXECUÇÃO")
+
+        for i, ticker in enumerate(tickers):
+            ticker_api = ticker + ".SA"
+
+            st.write(f"🔵 **Processando {ticker}...**")
+
+            df = get_ticker_data(ticker_api)
+            if not validate_data(df):
+                st.write(f"⚠️ Dados inválidos para {ticker}. Pulando...")
+                continue
+
+            df = apply_all_indicators(df)
+            if df is None or df.empty:
+                st.write(f"⚠️ Indicadores retornaram dataframe vazio para {ticker}.")
+                continue
+
+            criteria = evaluate_all_criteria(df)
+            score_info = calculate_score(criteria)
+
+            score_info["details"]["df"] = df
+            results[ticker] = score_info
+
+            st.write(f"✔️ Score de {ticker}: **{score_info['score']} / 5**")
+            st.write("—")
+
+            progress.progress((i + 1) / total)
+            time.sleep(0.05)
+
+        st.success("🟩 Varredura concluída!")
 
     return {
         "raw_results": results,
         "top_assets": select_top_assets(results)
     }
 
-# ============================================================
-# UTIL — Nome empresa
-# ============================================================
-@st.cache_data(ttl=3600)
-def nome_empresa_yf(ticker):
-    try:
-        tk = yf.Ticker(f"{ticker}.SA")
-        return tk.info.get("longName") or ticker
-    except:
-        return ticker
 
-# ============================================================
-# CONVERTE DF → ATIVOS APIMEC
-# ============================================================
-def ler_ativos_from_dataframe(df):
-    ativos = []
-    for _, r in df.iterrows():
-        ativos.append({
-            "ticker": r["Ticker"],
-            "operacao": "compra" if r["Operação"] == "COMPRA" else "venda",
-            "preco": float(r["Entrada"]),
-            "stop_loss": float(r["Stop"]),
-            "stop_gain": float(r["Alvo"]),
-            "indice": r["Índice"],
-        })
-    return ativos
+# ------------------------------------------------------------
+# DASHBOARD PRINCIPAL
+# ------------------------------------------------------------
+def render_dashboard():
 
-# ============================================================
-# CANDLE
-# ============================================================
-def _candles_png(ticker):
-    raw = yf.download(f"{ticker}.SA", period="6mo", progress=False)
-    if raw.empty:
-        return None
+    setup_page()
 
-    df = raw[["Open","High","Low","Close","Volume"]].dropna().tail(70)
-    df["MM8"] = df["Close"].rolling(8).mean()
-    df["MM50"] = df["Close"].rolling(50).mean()
+    st.sidebar.header("📡 Filtros do Fênix")
 
-    dates = mdates.date2num(df.index.to_pydatetime())
-    imgfile = f"_apimec_{ticker}.png"
+    df_tickers = pd.read_csv(CSV_PATH, sep=";")
 
-    fig, ax = plt.subplots(figsize=(6,3))
-    for i,(o,h,l,c) in enumerate(zip(df.Open,df.High,df.Low,df.Close)):
-        col = "green" if c>=o else "red"
-        ax.plot([dates[i],dates[i]],[l,h],color=col)
-        ax.add_patch(plt.Rectangle((dates[i]-0.3,min(o,c)),0.6,abs(o-c),color=col))
-    ax.plot(df.index, df.MM8)
-    ax.plot(df.index, df.MM50)
-    fig.savefig(imgfile, dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    return imgfile
+    indices = ["TODOS"] + df_tickers["indice"].unique().tolist()
 
-# ============================================================
-# RELATÓRIO APIMEC (PDF)
-# ============================================================
-def export_pdf_apimec_from_scanner(df_sel, nome, cnpi, cpf):
+    indice_escolhido = st.sidebar.selectbox(
+        "Selecione o índice:",
+        options=indices,
+        index=0
+    )
 
-    ativos = ler_ativos_from_dataframe(df_sel)
-    if not ativos:
-        raise RuntimeError("Nenhum ativo selecionado.")
+    if indice_escolhido == "TODOS":
+        tickers_filtrados = df_tickers["ticker"].dropna().unique().tolist()
+    else:
+        tickers_filtrados = (
+            df_tickers[df_tickers["indice"] == indice_escolhido]["ticker"]
+            .dropna()
+            .unique()
+            .tolist()
+        )
 
-    data_hoje = datetime.date.today()
-    filename = f"Relatorio_APIMEC_{data_hoje}.pdf"
+    st.sidebar.markdown(f"**Ativos carregados:** {len(tickers_filtrados)}")
 
-    buff = io.BytesIO()
-    c = canvas.Canvas(buff, pagesize=landscape(A4))
-    W, H = landscape(A4)
+    if st.button("🌀 Rodar Varredura Agora"):
+        with st.spinner("Executando ciclo do BP-Fênix..."):
+            output = run_full_cycle_with_logs(tickers_filtrados)
 
-    for a in ativos:
-        tk = a["ticker"]
-        op = a["operacao"].upper()
-        alvo = a["preco"]
-        empresa = nome_empresa_yf(tk)
+        st.session_state["fenix_output"] = output
+        st.success("Ciclo concluído!")
 
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(2*cm, H-2*cm, "RELATÓRIO DE ANÁLISE — APIMEC")
+    output = st.session_state.get("fenix_output")
+    if not output:
+        st.info("◀️ Selecione um índice e rode a varredura.")
+        return
 
-        c.setFont("Helvetica", 10)
-        c.drawString(2*cm, H-3*cm, f"{tk} — {empresa}")
-        c.drawString(2*cm, H-3.6*cm, f"Operação: {op} | Preço alvo: R$ {alvo:.2f}")
+    # ------------------------------------------------------------
+    # 🔥 TOP 5
+    # ------------------------------------------------------------
+    st.markdown("## 🔥 Top Selecionados pelo BP-Fênix")
 
-        img = _candles_png(tk)
-        if img:
-            c.drawImage(ImageReader(img), 2*cm, H-12*cm, width=W-4*cm, height=6*cm)
-            os.remove(img)
+    rows = []
 
-        c.setFont("Helvetica", 9)
-        c.drawString(2*cm, 2.8*cm, f"{nome} ({cnpi}) — CPF {cpf}")
-        c.showPage()
+    for asset in output["top_assets"]:
 
-    c.save()
-    with open(filename, "wb") as f:
-        f.write(buff.getvalue())
-    buff.close()
-    return filename
+        ticker = asset["ticker"]
+        fs_value = asset.get("fs", 0)
 
-# ============================================================
-# DASHBOARD
-# ============================================================
-df_tickers = pd.read_csv(CSV_PATH, sep=";")
+        try:
+            indice_ticker = df_tickers[df_tickers["ticker"] == ticker]["indice"].values[0]
+        except Exception:
+            indice_ticker = "DESCONHECIDO"
 
-indices = ["TODOS"] + df_tickers["indice"].unique().tolist()
-indice = st.sidebar.selectbox("Índice", indices)
+        try:
+            df_original = asset["details"]["df"]
+            trade = generate_trade_setup(df_original, fs_value)
+        except Exception:
+            trade = None
 
-tickers = df_tickers["ticker"].tolist() if indice=="TODOS" else \
-          df_tickers[df_tickers.indice==indice]["ticker"].tolist()
+        if not trade:
+            continue
 
-if st.button("🔍 Rodar Varredura"):
-    out = run_full_cycle_with_logs(tickers)
-    st.session_state["out"] = out
-
-out = st.session_state.get("out")
-if out:
-    rows=[]
-    for a in out["top_assets"]:
-        trade = generate_trade_setup(a["details"]["df"], a["fs"])
         rows.append({
             "Selecionar": False,
-            "Ticker": a["ticker"],
-            "Índice": indice,
-            "Score": a["score"],
-            "FS": a["fs"],
-            "Operação": "COMPRA" if trade["operacao"]=="LONG" else "VENDA",
-            "Entrada": trade["entrada"],
-            "Stop": trade["stop"],
-            "Alvo": trade["alvo"],
-            "R/R": trade["rr"]
+            "Ticker": ticker,
+            "Índice": indice_ticker,
+            "Score": round(asset["score"], 2),
+            "FS": round(fs_value, 3),
+            "Operação": "COMPRA" if trade["operacao"] == "LONG" else "VENDA",
+            "Entrada": round(trade["entrada"], 2),
+            "Stop": round(trade["stop"], 2),
+            "Alvo": round(trade["alvo"], 2),
+            "R/R": round(trade["rr"], 2),
+            "ATR Stop": round(trade["stop_dist_atr"], 2),
+            "ATR Alvo": round(trade["target_dist_atr"], 2),
         })
 
-    df = st.data_editor(pd.DataFrame(rows), hide_index=True)
+    if not rows:
+        st.warning("Nenhum ativo válido no Top 5.")
+        return
 
-    st.markdown("### 🔐 Dados do Analista")
-    nome = st.text_input("Nome")
-    cnpi = st.text_input("CNPI")
-    cpf = st.text_input("CPF")
+    df_top5 = pd.DataFrame(rows)
 
-    if st.button("📄 Gerar Relatório APIMEC"):
-        sel = df[df["Selecionar"]]
-        pdf = export_pdf_apimec_from_scanner(sel, nome, cnpi, cpf)
-        with open(pdf,"rb") as f:
-            st.download_button("⬇️ Baixar PDF", f, file_name=pdf)
+    st.markdown("## 📋 Seleção para Relatório")
 
+    df_top5 = st.data_editor(
+        df_top5,
+        hide_index=True,
+        use_container_width=True,
+        column_config={
+            "Selecionar": st.column_config.CheckboxColumn("✔"),
+        }
+    )
+
+    # ------------------------------------------------------------
+    # 📄 GERAR RELATÓRIO (placeholder)
+    # ------------------------------------------------------------
+    if st.button("📄 Gerar Relatório (ativos selecionados)"):
+
+        selecionados = df_top5[df_top5["Selecionar"]]
+
+        if selecionados.empty:
+            st.warning("Selecione ao menos um ativo.")
+        else:
+            st.success(f"{len(selecionados)} ativo(s) selecionado(s).")
+            st.dataframe(selecionados, use_container_width=True)
 
 
 # ------------------------------------------------------------
@@ -218,5 +206,3 @@ if out:
 # ------------------------------------------------------------
 if __name__ == "__main__":
     render_dashboard()
-
-
