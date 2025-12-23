@@ -9,15 +9,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 🔐 Login padrão Phoenix (assinante)
-from auth import user_logged, restore_session_if_needed
-restore_session_if_needed()
-
-if not user_logged():
-    st.error("⚠️ Acesso restrito a assinantes.")
-    if st.button("🔐 Ir para Login"):
-        st.switch_page("pages/01_login.py")
-    st.stop()
 
 # =========================================================
 # Imports
