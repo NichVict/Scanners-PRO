@@ -74,9 +74,11 @@ def warn(msg): st.warning(f"⚠️ {msg}")
 # ===============================
 # Autenticação Tastytrade
 # ===============================
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_tt_token() -> str:
-    resp = requests.post(
+    session = requests.Session()
+
+    resp = session.post(
         f"{TT_BASE_URL}/sessions",
         json={
             "login": TT_USERNAME,
@@ -86,10 +88,13 @@ def get_tt_token() -> str:
         timeout=15,
     )
 
-    # DEBUG (importante para validar erro real)
-    if resp.status_code != 200:
-        st.write("STATUS:", resp.status_code)
-        st.write("RESPONSE:", resp.text)
+    # 🔐 DEVICE CHALLENGE HANDLER (NOVO)
+    if resp.status_code == 403:
+        data = resp.json()
+
+        if data.get("error", {}).get("code") == "device_challenge_required":
+            st.warning("🔐 Device challenge required. Faça login manual no site da tastytrade e marque 'trusted device', depois rode novamente.")
+            st.stop()
 
     resp.raise_for_status()
 
