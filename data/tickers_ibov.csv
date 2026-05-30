@@ -333,6 +333,152 @@ MMMC34;3m DRN ED;BDR
 STOC34;Stone Co DRN;BDR
 S2ED34;Solar Tech DRN;BDR
 
+RIG;Transocean;USA
+FSLR;First Solar;USA
+SPOT;Spotify;USA
+TTWO;Take-Two Interactive;USA
+AAL;American Airlines;USA
+NOW;ServiceNow;USA
+PDD;PDD Holdings;USA
+BILI;Bilibili;USA
+TAL;TAL Education;USA
+NFLX;Netflix;USA
+MELI;MercadoLibre;USA
+PYPL;PayPal;USA
+ADBE;Adobe;USA
+UBER;Uber;USA
+BRK-B;Berkshire Hathaway;USA
+PAGS;PagSeguro;USA
+ABNB;Airbnb;USA
+SE;Sea Limited;USA
+TDOC;Teladoc Health;USA
+SNOW;Snowflake;USA
+U;Unity Software;USA
+BYND;Beyond Meat;USA
+KC;Kingsoft Cloud;USA
+TTD;The Trade Desk;USA
+RBLX;Roblox;USA
+PLTR;Palantir;USA
+COIN;Coinbase;USA
+CRWD;CrowdStrike;USA
+UPST;Upstart;USA
+SHOP;Shopify;USA
+AMZN;Amazon;USA
+TSLA;Tesla;USA
+LUMN;Lumen Technologies;USA
+BNTX;BioNTech;USA
+MRNA;Moderna;USA
+AMD;Advanced Micro Devices;USA
+BIDU;Baidu;USA
+BILL;Bill Holdings;USA
+MNST;Monster Beverage;USA
+SGML;Sigma Lithium;USA
+NU;Nu Holdings;USA
+SBSW;Sibanye Stillwater;USA
+JD;JD.com;USA
+BABA;Alibaba;USA
+EC;Ecopetrol;USA
+LYG;Lloyds Banking;USA
+INTC;Intel;USA
+MSTR;Strategy Inc;USA
+SAN;Santander;USA
+MT;ArcelorMittal;USA
+VOD;Vodafone;USA
+ANET;Arista Networks;USA
+DIS;Walt Disney;USA
+PANW;Palo Alto Networks;USA
+TEF;Telefonica;USA
+CRM;Salesforce;USA
+AMT;American Tower;USA
+AXP;American Express;USA
+CSCO;Cisco;USA
+JPM;JPMorgan;USA
+DG;Dollar General;USA
+CMCSA;Comcast;USA
+ORCL;Oracle;USA
+AAP;Advance Auto Parts;USA
+T;AT&T;USA
+VZ;Verizon;USA
+MA;Mastercard;USA
+ABBV;AbbVie;USA
+CL;Colgate-Palmolive;USA
+DELL;Dell Technologies;USA
+CAT;Caterpillar;USA
+PFE;Pfizer;USA
+PG;Procter & Gamble;USA
+MS;Morgan Stanley;USA
+XYZ;Block Inc;USA
+TXN;Texas Instruments;USA
+C;Citigroup;USA
+WFC;Wells Fargo;USA
+COST;Costco;USA
+AAPL;Apple;USA
+ASML;ASML;USA
+V;Visa;USA
+XOM;Exxon Mobil;USA
+EQNR;Equinor;USA
+SBUX;Starbucks;USA
+LLY;Eli Lilly;USA
+CVX;Chevron;USA
+COP;ConocoPhillips;USA
+JNJ;Johnson & Johnson;USA
+F;Ford Motors;USA
+MSFT;Microsoft;USA
+AMAT;Applied Materials;USA
+AZN;AstraZeneca;USA
+BP;BP;USA
+EQIX;Equinix;USA
+MCD;McDonald's;USA
+O;Realty Income;USA
+NEE;NextEra Energy;USA
+NEM;Newmont;USA
+DEO;Diageo;USA
+UL;Unilever;USA
+GS;Goldman Sachs;USA
+NKE;Nike;USA
+QCOM;Qualcomm;USA
+HSBC;HSBC;USA
+BKNG;Booking Holdings;USA
+GM;General Motors;USA
+RIO;Rio Tinto;USA
+BAC;Bank of America;USA
+PEP;PepsiCo;USA
+BLK;BlackRock;USA
+MPW;Medical Properties Trust;USA
+GOOGL;Alphabet Class A;USA
+SPG;Simon Property;USA
+OXY;Occidental Petroleum;USA
+UNH;UnitedHealth;USA
+GOOG;Alphabet Class C;USA
+KHC;Kraft Heinz;USA
+GE;GE Aerospace;USA
+NVDA;Nvidia;USA
+HPQ;HP Inc;USA
+FNV;Franco-Nevada;USA
+HD;Home Depot;USA
+NDAQ;Nasdaq Inc;USA
+TMO;Thermo Fisher;USA
+ALB;Albemarle;USA
+META;Meta Platforms;USA
+KO;Coca-Cola;USA
+MRK;Merck;USA
+PLD;Prologis;USA
+TSM;TSMC;USA
+AVGO;Broadcom;USA
+WMT;Walmart;USA
+DHR;Danaher;USA
+BTI;British American Tobacco;USA
+SUI;Sun Communities;USA
+NVO;Novo Nordisk;USA
+MU;Micron Technology;USA
+DE;Deere & Co;USA
+TM;Toyota;USA
+STAG;STAG Industrial;USA
+SONY;Sony Group;USA
+MMM;3M;USA
+STNE;StoneCo;USA
+SEDG;SolarEdge;USA
+
 BOVA11;iShares Ibovespa Fundo de Índice;ETF
 SMAL11;iShares BM&FBovespa Small Cap Fundo de Índice;ETF
 BOVV11;It Now Ibovespa Fundo de Índice;ETF
