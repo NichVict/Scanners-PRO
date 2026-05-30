@@ -1,8 +1,4 @@
-bash
 
-cat > /mnt/user-data/outputs/Scanner_Opcoes_USA.py << 'ENDOFFILE'
-# Scanner_Opcoes_USA.py
-# -*- coding: utf-8 -*-
 """
 Scanner de Opções — EUA (Tastytrade + Yahoo + Black-Scholes local)
 
@@ -702,7 +698,5 @@ if btn_run or st.session_state["primeira_exec_usa"]:
             status.update(label="Erro no processamento", state="error")
             err(str(e))
             st.exception(e)
-ENDOFFILE
-echo "Done"
-Done
+
 
