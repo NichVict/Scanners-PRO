@@ -563,98 +563,171 @@ if btn_run or st.session_state["primeira_exec_usa"]:
 
             # ====== Saída ======
             st.subheader("🏆 Top Oportunidades por Vencimento 💎")
-
+            
             if top.empty:
                 warn("Nenhuma oportunidade encontrada. Ajuste os filtros (delta, DTE, IV%).")
+            
             else:
                 top = top.sort_values("score", ascending=False).reset_index(drop=True)
                 top["expiration"] = pd.to_datetime(top["expiration"], errors="coerce").dt.date
-                num_cols = top.select_dtypes(include=["float","float64","int","int64"]).columns
+            
+                num_cols = top.select_dtypes(include=["float", "float64", "int", "int64"]).columns
                 top[num_cols] = top[num_cols].apply(lambda x: np.round(x, 4))
-
-                # Cards
+            
+                # =========================
+                # Cards (dados)
+                # =========================
                 num_cards = min(int(top_n), 10)
-                top5 = top.head(num_cards)[["symbol","score","type","strike","delta","expiration","iv_local_pct"]]
-
+            
+                top5 = top.head(num_cards)[
+                    ["symbol", "score", "type", "strike", "delta", "expiration", "iv_local_pct"]
+                ]
+            
                 def get_card_gradient(score, tipo):
                     s = float(score)
+            
                     if tipo == "CALL":
                         start, end = "#004d00", "#66ff66"
                     else:
                         start, end = "#7f0000", "#ff6666"
-                    return f"linear-gradient(135deg, {start} {(s*100):.0f}%, {end})"
-
+            
+                    # 🔥 FIX: gradient simples (sem % quebrando CSS)
+                    return f"linear-gradient(135deg, {start}, {end})"
+            
                 card_html = ""
+            
                 for _, row in top5.iterrows():
                     grad = get_card_gradient(row["score"], row["type"])
                     delta_color = "lime" if row["type"] == "CALL" else "salmon"
+            
                     card_html += f"""
-                    <div class="card" style="background-image: {grad};">
+                    <div class="card" style="background: {grad};">
                         <div class="symbol">{row['symbol'][:16]} ({row['type']})</div>
+            
                         <div class="score-label">Score</div>
                         <div class="score">{row['score']:.2f}</div>
-                        <div class="details">Strike ${row['strike']:.0f} • Venc. {row['expiration']}</div>
+            
+                        <div class="details">
+                            Strike ${row['strike']:.0f} • Venc. {row['expiration']}
+                        </div>
+            
                         <div class="delta-line">
-                            <span style='color:{delta_color}; font-weight:600;'>Δ {row['delta']:.2f}</span>
-                            &nbsp;|&nbsp; IV {row['iv_local_pct']:.1f}%
+                            <span style="color:{delta_color}; font-weight:600;">
+                                Δ {row['delta']:.2f}
+                            </span>
+                            &nbsp;|&nbsp;
+                            IV {row['iv_local_pct']:.1f}%
                         </div>
                     </div>
                     """
-
-                st.markdown(f"""
+            
+                # =========================
+                # CSS + render correto (FIX STREAMLIT)
+                # =========================
+                st.components.v1.html(f"""
                 <style>
-                .card {{
-                    display: inline-block; border-radius: 16px; padding: 16px 18px;
-                    margin: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-                    color: white; width: 16.5%; text-align: center; min-height: 190px;
-                    transition: all 0.25s ease;
-                }}
-                .card:hover {{ transform: translateY(-4px) scale(1.03); box-shadow: 0 6px 14px rgba(0,0,0,0.6); }}
-                .symbol {{ font-weight: 600; font-size: 0.9rem; margin-bottom: 4px; }}
-                .score-label {{ font-size: 0.75rem; color: rgba(255,255,255,0.9); text-transform: uppercase; }}
-                .score {{ font-size: 1.8rem; font-weight: 700; margin-bottom: 6px; color: #fff; }}
-                .details {{ font-size: 0.82rem; color: rgba(255,255,255,0.85); }}
-                .delta-line {{ margin-top: 4px; font-size: 0.82rem; }}
-                .cards-container {{ display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; gap: 10px; }}
-                @media (max-width: 1000px) {{ .card {{ width: 45%; }} }}
-                @media (max-width: 600px)  {{ .card {{ width: 90%; }} }}
+                    .cards-container {{
+                        display: flex;
+                        flex-wrap: wrap;
+                        justify-content: center;
+                        gap: 10px;
+                    }}
+            
+                    .card {{
+                        border-radius: 16px;
+                        padding: 16px 18px;
+                        margin: 8px;
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+                        color: white;
+                        width: 260px;
+                        min-height: 190px;
+                        text-align: center;
+                        transition: all 0.25s ease;
+                    }}
+            
+                    .card:hover {{
+                        transform: translateY(-4px) scale(1.03);
+                        box-shadow: 0 6px 14px rgba(0,0,0,0.6);
+                    }}
+            
+                    .symbol {{
+                        font-weight: 600;
+                        font-size: 0.9rem;
+                        margin-bottom: 4px;
+                    }}
+            
+                    .score-label {{
+                        font-size: 0.75rem;
+                        opacity: 0.9;
+                        text-transform: uppercase;
+                    }}
+            
+                    .score {{
+                        font-size: 1.8rem;
+                        font-weight: 700;
+                        margin-bottom: 6px;
+                    }}
+            
+                    .details {{
+                        font-size: 0.82rem;
+                        opacity: 0.85;
+                    }}
+            
+                    .delta-line {{
+                        margin-top: 4px;
+                        font-size: 0.82rem;
+                    }}
                 </style>
-                <div class="cards-container">{card_html}</div>
-                """, unsafe_allow_html=True)
-
+            
+                <div class="cards-container">
+                    {card_html}
+                </div>
+                """, height=650, scrolling=True)
+            
                 st.markdown("---")
-
-                # Tabela
+            
+                # =========================
+                # TABELA (mantida igual lógica)
+                # =========================
                 def score_color(val, tipo):
-                    if pd.isna(val): return ""
+                    if pd.isna(val):
+                        return ""
+            
                     s = max(0, min(float(val), 1))
+            
                     if tipo == "CALL":
-                        dark, light = np.array([0,77,0]), np.array([102,255,102])
+                        dark, light = np.array([0, 77, 0]), np.array([102, 255, 102])
                     else:
-                        dark, light = np.array([127,0,0]), np.array([255,102,102])
-                    rgb = (dark*s + light*(1-s)).astype(int)
+                        dark, light = np.array([127, 0, 0]), np.array([255, 102, 102])
+            
+                    rgb = (dark * s + light * (1 - s)).astype(int)
+            
                     return f"background-color: rgb({rgb[0]},{rgb[1]},{rgb[2]}); color: black; font-weight: 700;"
-
-                show_cols = ["score","symbol","type","expiration","strike","delta","gamma",
-                             "vega","theta","iv_local_pct","bs_price","underlying_symbol"]
+            
+                show_cols = [
+                    "score", "symbol", "type", "expiration", "strike",
+                    "delta", "gamma", "vega", "theta",
+                    "iv_local_pct", "bs_price", "underlying_symbol"
+                ]
+            
                 show_cols = [c for c in show_cols if c in top.columns]
-
+            
                 fmt = {}
-                for c in top[show_cols].columns:
+            
+                for c in show_cols:
                     if top[c].dtype.kind in "fi":
-                        if c in ["strike","bs_price"]:
-                            fmt[c] = "$ {:,.2f}".format
-                        else:
-                            fmt[c] = "{:.4f}".format
-
+                        fmt[c] = "$ {:,.2f}".format if c in ["strike", "bs_price"] else "{:.4f}".format
+            
                 styled = (
-                    top[show_cols].style
+                    top[show_cols]
+                    .style
                     .format(fmt)
                     .apply(
-                        lambda r: [score_color(r["score"], r["type"])] + [""]*(len(r)-1),
+                        lambda r: [score_color(r["score"], r["type"])] + [""] * (len(r) - 1),
                         axis=1
                     )
                 )
+            
                 st.dataframe(styled, use_container_width=True, hide_index=True)
 
             # ====== Gráficos candles ======
