@@ -81,13 +81,18 @@ def get_tt_token() -> str:
         json={
             "login": TT_USERNAME,
             "password": TT_PASSWORD,
-            "client-id": TT_CLIENT_ID,
-            "client-secret": TT_CLIENT_SECRET,
         },
         headers={"Content-Type": "application/json"},
         timeout=15,
     )
+
+    # DEBUG (importante para validar erro real)
+    if resp.status_code != 200:
+        st.write("STATUS:", resp.status_code)
+        st.write("RESPONSE:", resp.text)
+
     resp.raise_for_status()
+
     return resp.json()["data"]["session-token"]
 
 def _tt_headers(token: str) -> dict:
