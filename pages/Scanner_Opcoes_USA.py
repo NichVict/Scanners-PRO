@@ -55,13 +55,13 @@ section[data-testid="stSidebar"] h3 { font-size: 1rem !important; }
 # ===============================
 # Credenciais (.env)
 # ===============================
-load_dotenv(find_dotenv(), override=True)
-TT_USERNAME   = os.getenv("TT_USERNAME", "")
-TT_PASSWORD   = os.getenv("TT_PASSWORD", "")
-TT_CLIENT_ID  = os.getenv("TT_CLIENT_ID", "")
-TT_CLIENT_SECRET = os.getenv("TT_CLIENT_SECRET", "")
-TT_BASE_URL   = os.getenv("TT_BASE_URL", "https://api.tastyworks.com")
+import streamlit as st
 
+TT_USERNAME = st.secrets["TT_USERNAME"]
+TT_PASSWORD = st.secrets["TT_PASSWORD"]
+TT_CLIENT_ID = st.secrets["TT_CLIENT_ID"]
+TT_CLIENT_SECRET = st.secrets["TT_CLIENT_SECRET"]
+TT_BASE_URL = st.secrets["TT_BASE_URL"]
 # ===============================
 # Helpers
 # ===============================
