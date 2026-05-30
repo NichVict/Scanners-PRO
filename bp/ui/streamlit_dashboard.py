@@ -79,7 +79,20 @@ def setup_page():
 # ------------------------------------------------------------
 # CICLO PRINCIPAL
 # ------------------------------------------------------------
-def run_full_cycle_with_logs(tickers: list[str]):
+# ------------------------------------------------------------
+# CICLO PRINCIPAL
+# ------------------------------------------------------------
+def _build_ticker_api(ticker: str, indice: str) -> str:
+    """
+    USA: ticker direto, sem sufixo.
+    Todos os outros (IBOV, SMALL CAPS, BDR, ETF): sufixo .SA
+    """
+    if indice == "USA":
+        return ticker
+    return ticker + ".SA"
+
+
+def run_full_cycle_with_logs(tickers: list[str], df_tickers: pd.DataFrame):
     st.info(f"🔍 Total de ativos carregados: **{len(tickers)}**")
 
     progress = st.progress(0)
@@ -88,12 +101,20 @@ def run_full_cycle_with_logs(tickers: list[str]):
     results: dict = {}
     total = max(len(tickers), 1)
 
+    ticker_indice_map = (
+        df_tickers.drop_duplicates(subset="ticker")
+        .set_index("ticker")["indice"]
+        .to_dict()
+    )
+
     with status_box:
         st.write("### 📡 LOG DA EXECUÇÃO")
 
         for i, ticker in enumerate(tickers):
-            ticker_api = ticker + ".SA"
-            st.write(f"🔵 **Processando {ticker}...**")
+            indice = ticker_indice_map.get(ticker, "IBOV")
+            ticker_api = _build_ticker_api(ticker, indice)
+
+            st.write(f"🔵 **Processando {ticker}** ({indice}) → `{ticker_api}`")
 
             df = get_ticker_data(ticker_api)
             if not validate_data(df):
@@ -109,8 +130,6 @@ def run_full_cycle_with_logs(tickers: list[str]):
 
             criteria = evaluate_all_criteria(df)
             score_info = calculate_score(criteria)
-
-            # guarda df original para setups / relatório
             score_info["details"]["df"] = df
             results[ticker] = score_info
 
@@ -691,13 +710,14 @@ def render_dashboard():
     st.sidebar.header("📡 Filtros do Fênix")
 
     df_tickers = pd.read_csv(CSV_PATH, sep=";")
-
+    
     indices = ["TODOS"] + df_tickers["indice"].dropna().unique().tolist()
     indice_escolhido = st.sidebar.selectbox("Selecione o índice:", options=indices, index=0)
-
-    # Seleção dos tickers
+    
     if indice_escolhido == "TODOS":
-        tickers_filtrados = df_tickers["ticker"].dropna().unique().tolist()
+        tickers_filtrados = df_tickers[df_tickers["indice"] != "USA"]["ticker"].dropna().unique().tolist()
+    elif indice_escolhido == "USA":
+        tickers_filtrados = df_tickers[df_tickers["indice"] == "USA"]["ticker"].dropna().unique().tolist()
     else:
         tickers_filtrados = (
             df_tickers[df_tickers["indice"] == indice_escolhido]["ticker"].dropna().unique().tolist()
@@ -708,7 +728,7 @@ def render_dashboard():
     # Botão rodar
     if st.button("🌀 Rodar Varredura Agora"):
         with st.spinner("Executando ciclo do BP-Fênix..."):
-            output = run_full_cycle_with_logs(tickers_filtrados)
+            output = run_full_cycle_with_logs(tickers_filtrados, df_tickers)
         st.session_state["fenix_output"] = output
         st.success("Ciclo concluído!")
 
